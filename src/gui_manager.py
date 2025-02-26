@@ -332,6 +332,11 @@ class GUIManager:
                 continue
             except Exception as e:
                 print(f"Errore nell'aggiornamento sezione {section}: {str(e)}")
-            finally:
-                if section != 'QUIT':
+                
+            # Segnala completamento solo per aggiornamenti validi
+            if section not in ['QUIT', None]:
+                try:
                     self.update_queue.task_done()
+                except ValueError:
+                    # Ignora errori di task_done
+                    pass

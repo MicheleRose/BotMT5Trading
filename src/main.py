@@ -372,7 +372,13 @@ def main():
                                         "bb_down": latest['lower_band'],
                                         "atr": latest['atr']
                                     },
-                                    "market_condition": logic.get_market_condition(latest['atr'], df['atr'].mean())
+                                    "market_condition": logic.get_market_condition(latest['atr'], df['atr'].mean()),
+                                    "order_params": {
+                                        "type_time": order["type_time"],
+                                        "type_filling": order["type_filling"],
+                                        "magic": order["magic"],
+                                        "deviation": order["deviation"]
+                                    }
                                 }
                                 display.update("TRADE", trade_data)
                                 if gui_instance:

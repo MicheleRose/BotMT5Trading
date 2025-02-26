@@ -118,6 +118,7 @@ class TradingLogic:
         stop_loss = price - sl_pips if signal == "buy" else price + sl_pips
         take_profit = price + tp_pips if signal == "buy" else price - tp_pips
         
+        # Prepara l'ordine con i parametri corretti per MT5
         order = {
             "action": "TRADE_ACTION_DEAL",
             "symbol": self.trading_config["symbol"],
@@ -133,13 +134,19 @@ class TradingLogic:
             "type_filling": self.execution_config["type_filling"]
         }
         
-        # Aggiungi alla lista delle posizioni aperte
+        # Aggiungi alla lista delle posizioni aperte con tutti i parametri
         position = {
             "price": price,
             "volume": volume,
             "sl": stop_loss,
             "tp": take_profit,
-            "open_time": datetime.now()
+            "open_time": datetime.now(),
+            "order_params": {
+                "type_time": self.execution_config["type_time"],
+                "type_filling": self.execution_config["type_filling"],
+                "magic": self.execution_config["magic_number"],
+                "deviation": self.execution_config["deviation"]
+            }
         }
         self.open_positions[signal].append(position)
         

@@ -79,6 +79,30 @@ class MT5Connector:
         except Exception as e:
             raise Exception(f"Errore nel download dei dati per {symbol}: {str(e)}")
         
+    def _convert_mt5_constants(self, request):
+        """Converte le stringhe delle costanti MT5 nei valori corretti."""
+        if isinstance(request["action"], str):
+            action = request["action"]
+            if not action.startswith("TRADE_ACTION_"):
+                action = f"TRADE_ACTION_{action}"
+            request["action"] = getattr(mt5, action)
+        if isinstance(request["type"], str):
+            type_ = request["type"]
+            if not type_.startswith("ORDER_TYPE_"):
+                type_ = f"ORDER_TYPE_{type_}"
+            request["type"] = getattr(mt5, type_)
+        if isinstance(request["type_time"], str):
+            type_time = request["type_time"]
+            if not type_time.startswith("ORDER_TIME_"):
+                type_time = f"ORDER_TIME_{type_time}"
+            request["type_time"] = getattr(mt5, type_time)
+        if isinstance(request["type_filling"], str):
+            type_filling = request["type_filling"]
+            if not type_filling.startswith("ORDER_FILLING_"):
+                type_filling = f"ORDER_FILLING_{type_filling}"
+            request["type_filling"] = getattr(mt5, type_filling)
+        return request
+
     def place_order(self, request):
         """Invia un ordine di trading."""
         try:
@@ -86,15 +110,8 @@ class MT5Connector:
             if not mt5.symbol_select(request["symbol"], True):
                 raise ValueError(f"Impossibile selezionare il simbolo {request['symbol']}")
             
-            # Converti le stringhe delle costanti MT5 nei valori corretti
-            if isinstance(request["action"], str):
-                request["action"] = getattr(mt5, request["action"])
-            if isinstance(request["type"], str):
-                request["type"] = getattr(mt5, request["type"])
-            if isinstance(request["type_time"], str):
-                request["type_time"] = getattr(mt5, request["type_time"])
-            if isinstance(request["type_filling"], str):
-                request["type_filling"] = getattr(mt5, request["type_filling"])
+            # Converti le costanti MT5
+            request = self._convert_mt5_constants(request)
             
             # Invia l'ordine
             result = mt5.order_send(request)
@@ -125,18 +142,21 @@ class MT5Connector:
             close_price = symbol_info.ask if position["type"] == 1 else symbol_info.bid
             
             request = {
-                "action": mt5.TRADE_ACTION_DEAL,
+                "action": "TRADE_ACTION_DEAL",
                 "symbol": position["symbol"],
                 "volume": position["volume"],
-                "type": mt5.ORDER_TYPE_SELL if position["type"] == 0 else mt5.ORDER_TYPE_BUY,
+                "type": "ORDER_TYPE_SELL" if position["type"] == 0 else "ORDER_TYPE_BUY",
                 "position": position["ticket"],
                 "price": close_price,
                 "deviation": 1,
                 "magic": 123456,
                 "comment": "Close by AI Scalping Ultra",
-                "type_time": mt5.ORDER_TIME_GTC,
-                "type_filling": mt5.ORDER_FILLING_IOC,
+                "type_time": "GTC",
+                "type_filling": "IOC",
             }
+            
+            # Converti le costanti MT5
+            request = self._convert_mt5_constants(request)
             
             result = mt5.order_send(request)
             if result is None:
@@ -241,12 +261,15 @@ class MT5Connector:
             position = position[0]._asdict()
             
             request = {
-                "action": mt5.TRADE_ACTION_SLTP,
+                "action": "TRADE_ACTION_SLTP",
                 "symbol": position["symbol"],
                 "position": ticket,
                 "sl": sl if sl is not None else position["sl"],
                 "tp": tp if tp is not None else position["tp"]
             }
+            
+            # Converti le costanti MT5
+            request = self._convert_mt5_constants(request)
             
             result = mt5.order_send(request)
             if result is None:

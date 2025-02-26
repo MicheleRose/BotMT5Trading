@@ -68,9 +68,17 @@ class DisplayManager:
         buy_conditions = conditions.get('buy_conditions', '0/3')
         sell_conditions = conditions.get('sell_conditions', '0/3')
         
+        # Parametri ordine
+        order_params = data.get('order_params', {})
+        type_time = order_params.get('type_time', '')
+        type_filling = order_params.get('type_filling', '')
+        magic = order_params.get('magic', '')
+        deviation = order_params.get('deviation', '')
+
         message = (
             f"{trade_type}: "
             f"Volume={volume:.2f}, Price={price:.2f}, SL={sl:.2f}, TP={tp:.2f}, Spread={spread:.2f} | "
+            f"Ordine: Time={type_time}, Fill={type_filling}, Magic={magic}, Dev={deviation} | "
             f"RSI={rsi:.1f}, MACD={macd:.4f}/{macd_signal:.4f}, BB={bb_down:.2f}/{bb_up:.2f} | "
             f"Condizioni: BUY={buy_conditions}, SELL={sell_conditions}"
         )
