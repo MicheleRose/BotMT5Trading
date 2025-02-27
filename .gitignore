@@ -49,3 +49,10 @@ Thumbs.db
 # File di risultati e comandi generati
 commands/
 results/
+
+# Modelli di machine learning e file correlati
+models/
+*.keras
+*.h5
+*.pkl
+*.ckpt

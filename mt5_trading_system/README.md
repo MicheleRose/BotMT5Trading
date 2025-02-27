@@ -68,6 +68,11 @@ mt5_trading_system/
 ├── core/                    # Componenti core del sistema
 │   ├── mt5_command_base.py  # Classe base per tutti i client
 │   └── mt5_keeper.py        # Server per connessione persistente
+├── ml/                      # Modelli di machine learning
+│   ├── __init__.py
+│   ├── train_model.py       # Script per addestramento modello LSTM
+│   ├── predict_direction.py # Script per previsione direzione prezzi
+│   └── utils.py             # Utilità per preprocessing e gestione modelli
 └── tests/                   # Script di test
     ├── run_test_with_keeper.py
     ├── test_mt5.py
@@ -194,6 +199,42 @@ python -m mt5_trading_system.tests.test_trading_system -c mt5_trading_system/con
 
 ```bash
 python -m mt5_trading_system.tests.run_test_with_keeper -c mt5_trading_system/config/mt5_config.json
+```
+
+### Test del Modulo di Machine Learning
+
+#### Addestramento di un Modello LSTM
+
+```bash
+# Addestramento con 1000 candele, 10 epoche e batch size 32
+python -m mt5_trading_system.ml.train_model EURUSD H1 1000 ./models/lstm -e 10 -b 32
+
+# Addestramento rapido per test (100 candele, 2 epoche)
+python -m mt5_trading_system.ml.train_model EURUSD H1 100 ./models/lstm -e 2 -b 16 -d
+```
+
+#### Generazione di Previsioni
+
+```bash
+# Previsione utilizzando un modello esistente
+python -m mt5_trading_system.ml.predict_direction EURUSD ./models/lstm/models/EURUSD_H1_model.keras -s ./models/lstm/scalers/EURUSD_H1_scalers.pkl
+
+# Output di esempio:
+# {
+#   "probability": 0.7234,
+#   "direction": "up",
+#   "confidence": 0.4468,
+#   "symbol": "EURUSD",
+#   "timeframe": "H1",
+#   "timestamp": "2025-02-27T12:30:45.123456",
+#   "last_price": 1.04756,
+#   "indicators": {
+#     "rsi": 58.42,
+#     "macd": 0.00023,
+#     "adx": 24.56,
+#     "atr": 0.00042
+#   }
+# }
 ```
 
 ## Caratteristiche Avanzate
