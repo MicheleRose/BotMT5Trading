@@ -1,0 +1,51 @@
+# File di configurazione con credenziali sensibili
+#mt5_config.json
+#**/mt5_config.json
+
+# File di cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# File di lock MT5
+*.lock
+
+# Directory di lavoro MT5
+.mt5bot/
+
+# File di log
+*.log
+
+# Directory di ambiente virtuale
+venv/
+env/
+ENV/
+
+# File temporanei
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# File di risultati e comandi generati
+commands/
+results/

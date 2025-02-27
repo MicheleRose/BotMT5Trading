@@ -1,0 +1,18 @@
+{
+    "account": 650586,
+    "password": "_4XeVtQj",
+    "server": "TenTrade-Server",
+    "timeout": 60000,
+    "command_check_interval": 1.0,
+    "heartbeat_interval": 30.0,
+    "reconnect_interval": 60.0,
+    "debug": false,
+    "mt5_account": {
+        "nome": "GG Allin",
+        "server": "TenTrade-Server",
+        "tipo": "MTQ leads",
+        "login": 650586,
+        "password": "_4XeVtQj",
+        "investitore": "7hJm!iQu"
+    }
+}
