@@ -51,8 +51,8 @@ class MT5CommandBase:
         self.results_dir = self.work_dir / "results"
         
         # Imposta timeout
-        self.timeout = self.config.get("timeout", 10.0)  # secondi (ridotto da 60.0 a 10.0)
-        self.poll_interval = self.config.get("poll_interval", 0.5)  # secondi
+        self.timeout = self.config.get("timeout", 3.0)  # secondi (ridotto da 10.0 a 3.0)
+        self.poll_interval = self.config.get("poll_interval", 0.1)  # secondi (ridotto da 0.5 a 0.1)
         
         # Configura logging
         if self.config.get("debug", False):
@@ -107,8 +107,21 @@ class MT5CommandBase:
         Returns:
             Path alla directory di lavoro
         """
-        home = Path.home()
-        return home / ".mt5bot"
+        # Usa una directory di lavoro fissa per evitare problemi di percorso
+        # Questo assicura che MT5 Keeper e MT5Client utilizzino la stessa directory
+        if os.name == 'nt':  # Windows
+            # Su Windows, usa %APPDATA%\MT5Bot
+            appdata = os.environ.get('APPDATA', '')
+            if appdata:
+                return Path(appdata) / "MT5Bot"
+            else:
+                # Fallback a home directory
+                home = Path.home()
+                return home / ".mt5bot"
+        else:
+            # Su Unix-like, usa ~/.mt5bot
+            home = Path.home()
+            return home / ".mt5bot"
     
     def _check_keeper_running(self) -> bool:
         """
@@ -117,29 +130,34 @@ class MT5CommandBase:
         Returns:
             True se MT5 Keeper è in esecuzione, False altrimenti
         """
-        # Metodo 1: Verifica se il file di lock esiste
-        lock_file = self.work_dir / "mt5keeper.lock"
-        if not lock_file.exists():
-            logger.error("MT5 Keeper non in esecuzione: file di lock non trovato")
+        try:
+            # Metodo 1: Verifica se il file di lock esiste
+            lock_file = self.work_dir / "mt5keeper.lock"
+            if not lock_file.exists():
+                logger.error("MT5 Keeper non in esecuzione: file di lock non trovato")
+                return False
+            
+            # Metodo 2: Verifica se la directory commands esiste e possiamo scriverci
+            if not self.commands_dir.exists():
+                logger.error("MT5 Keeper non in esecuzione: directory commands non trovata")
+                return False
+            
+            if not os.access(self.commands_dir, os.W_OK):
+                logger.error("MT5 Keeper non in esecuzione: directory commands non accessibile in scrittura")
+                return False
+            
+            # Metodo 3: Verifica se la directory results esiste
+            if not self.results_dir.exists():
+                logger.error("MT5 Keeper non in esecuzione: directory results non trovata")
+                return False
+            
+            # Se tutte le verifiche sono passate, assumiamo che MT5 Keeper sia in esecuzione
+            logger.debug("MT5 Keeper sembra essere in esecuzione")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Errore nella verifica di MT5 Keeper: {e}")
             return False
-        
-        # Metodo 2: Verifica se la directory commands esiste e possiamo scriverci
-        if not self.commands_dir.exists():
-            logger.error("MT5 Keeper non in esecuzione: directory commands non trovata")
-            return False
-        
-        if not os.access(self.commands_dir, os.W_OK):
-            logger.error("MT5 Keeper non in esecuzione: directory commands non accessibile in scrittura")
-            return False
-        
-        # Metodo 3: Verifica se la directory results esiste
-        if not self.results_dir.exists():
-            logger.error("MT5 Keeper non in esecuzione: directory results non trovata")
-            return False
-        
-        # Se tutte le verifiche sono passate, assumiamo che MT5 Keeper sia in esecuzione
-        logger.debug("MT5 Keeper sembra essere in esecuzione")
-        return True
     
     def _create_directories(self) -> None:
         """
@@ -149,13 +167,14 @@ class MT5CommandBase:
             directory.mkdir(exist_ok=True, parents=True)
             logger.debug(f"Directory creata/verificata: {directory}")
     
-    def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def send_command(self, command_type: str, params: Dict[str, Any] = None, timeout: Optional[float] = None) -> Dict[str, Any]:
         """
         Invia un comando al MT5 Keeper e attende il risultato.
         
         Args:
             command_type: Tipo di comando da inviare
             params: Parametri del comando (opzionale)
+            timeout: Timeout in secondi per l'attesa del risultato (opzionale, se None usa il timeout predefinito)
             
         Returns:
             Risultato del comando
@@ -166,6 +185,9 @@ class MT5CommandBase:
         """
         if params is None:
             params = {}
+        
+        # Usa timeout specificato o predefinito
+        actual_timeout = timeout if timeout is not None else self.timeout
         
         # Verifica che MT5 Keeper sia in esecuzione
         if not self._check_keeper_running():
@@ -200,7 +222,7 @@ class MT5CommandBase:
         start_time = time.time()
         while not result_file.exists():
             # Verifica timeout
-            if time.time() - start_time > self.timeout:
+            if time.time() - start_time > actual_timeout:
                 # Rimuovi file comando se esiste ancora
                 if command_file.exists():
                     try:
@@ -208,7 +230,7 @@ class MT5CommandBase:
                     except:
                         pass
                 
-                raise TimeoutError(f"Timeout raggiunto ({self.timeout}s) per comando {command_id}")
+                raise TimeoutError(f"Timeout raggiunto ({actual_timeout}s) per comando {command_id}")
             
             # Verifica che MT5 Keeper sia ancora in esecuzione
             if not self._check_keeper_running():

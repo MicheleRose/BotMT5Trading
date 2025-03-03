@@ -78,9 +78,9 @@ class MT5Keeper:
         # Inizializza variabili per il controllo del ciclo principale
         self.last_heartbeat = datetime.datetime.now()
         self.last_reconnect_attempt = datetime.datetime.now()
-        self.command_check_interval = self.config.get("command_check_interval", 1.0)  # secondi
-        self.heartbeat_interval = self.config.get("heartbeat_interval", 30.0)  # secondi
-        self.reconnect_interval = self.config.get("reconnect_interval", 60.0)  # secondi
+        self.command_check_interval = self.config.get("command_check_interval", 0.5)  # secondi (ridotto da 1.0 a 0.5)
+        self.heartbeat_interval = self.config.get("heartbeat_interval", 5.0)  # secondi (ridotto da 30.0 a 5.0)
+        self.reconnect_interval = self.config.get("reconnect_interval", 10.0)  # secondi (ridotto da 60.0 a 10.0)
         
         # Gestione segnali per chiusura pulita
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -137,8 +137,21 @@ class MT5Keeper:
         Returns:
             Path alla directory di lavoro
         """
-        home = Path.home()
-        return home / ".mt5bot"
+        # Usa una directory di lavoro fissa per evitare problemi di percorso
+        # Questo assicura che MT5 Keeper e MT5Client utilizzino la stessa directory
+        if platform.system() == "Windows":  # Windows
+            # Su Windows, usa %APPDATA%\MT5Bot
+            appdata = os.environ.get('APPDATA', '')
+            if appdata:
+                return Path(appdata) / "MT5Bot"
+            else:
+                # Fallback a home directory
+                home = Path.home()
+                return home / ".mt5bot"
+        else:
+            # Su Unix-like, usa ~/.mt5bot
+            home = Path.home()
+            return home / ".mt5bot"
     
     def _create_directories(self) -> None:
         """
@@ -236,28 +249,64 @@ class MT5Keeper:
             try:
                 if mt5.terminal_info() is not None:
                     mt5.shutdown()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Errore durante la chiusura della connessione precedente: {e}")
+            
+            # Attendi un po' prima di tentare la connessione
+            time.sleep(1.0)
             
             # Inizializza MT5 senza parametri (auto-rilevamento)
             logger.info("Inizializzazione MT5 con auto-rilevamento")
-            init_result = mt5.initialize()
+            
+            # Tenta l'inizializzazione più volte in caso di errore
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    init_result = mt5.initialize()
+                    
+                    if init_result:
+                        break
+                    
+                    logger.warning(f"Tentativo {attempt+1}/{max_attempts} di inizializzazione MT5 fallito: {mt5.last_error()}")
+                    
+                    if attempt < max_attempts - 1:
+                        time.sleep(2.0)  # Attendi prima di riprovare
+                except Exception as e:
+                    logger.warning(f"Errore durante il tentativo {attempt+1}/{max_attempts} di inizializzazione MT5: {e}")
+                    if attempt < max_attempts - 1:
+                        time.sleep(2.0)  # Attendi prima di riprovare
             
             if not init_result:
-                logger.error(f"Inizializzazione MT5 fallita: {mt5.last_error()}")
+                logger.error(f"Inizializzazione MT5 fallita dopo {max_attempts} tentativi: {mt5.last_error()}")
                 return False
             
             # Effettua login se specificato
             account = self.config.get("account", 0)
             if account > 0:
-                login_result = mt5.login(
-                    account,
-                    self.config.get("password", ""),
-                    self.config.get("server", "")
-                )
+                # Tenta il login più volte in caso di errore
+                login_result = False
+                for attempt in range(max_attempts):
+                    try:
+                        login_result = mt5.login(
+                            account,
+                            self.config.get("password", ""),
+                            self.config.get("server", "")
+                        )
+                        
+                        if login_result:
+                            break
+                        
+                        logger.warning(f"Tentativo {attempt+1}/{max_attempts} di login MT5 fallito: {mt5.last_error()}")
+                        
+                        if attempt < max_attempts - 1:
+                            time.sleep(2.0)  # Attendi prima di riprovare
+                    except Exception as e:
+                        logger.warning(f"Errore durante il tentativo {attempt+1}/{max_attempts} di login MT5: {e}")
+                        if attempt < max_attempts - 1:
+                            time.sleep(2.0)  # Attendi prima di riprovare
                 
                 if not login_result:
-                    logger.error(f"Login MT5 fallito: {mt5.last_error()}")
+                    logger.error(f"Login MT5 fallito dopo {max_attempts} tentativi: {mt5.last_error()}")
                     mt5.shutdown()
                     return False
                 
@@ -299,16 +348,64 @@ class MT5Keeper:
             True se la connessione è attiva, False altrimenti
         """
         try:
-            terminal_info = mt5.terminal_info()
-            if terminal_info is None:
-                logger.warning("Heartbeat fallito: connessione MT5 persa")
-                self.connected = False
-                return False
+            # Verifica connessione con più tentativi
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    # Verifica se MT5 è ancora in esecuzione
+                    # Utilizziamo un comando più semplice e affidabile
+                    # Ottieni il saldo dell'account
+                    try:
+                        # Prova a ottenere il saldo dell'account
+                        account = mt5.account_info()
+                        if account is not None:
+                            # Aggiorna timestamp ultimo heartbeat
+                            self.last_heartbeat = datetime.datetime.now()
+                            logger.debug(f"Heartbeat OK: account_info disponibile")
+                            return True
+                    except Exception:
+                        # Prova a ottenere i simboli disponibili
+                        symbols = mt5.symbols_total()
+                        if symbols > 0:
+                            # Aggiorna timestamp ultimo heartbeat
+                            self.last_heartbeat = datetime.datetime.now()
+                            logger.debug(f"Heartbeat OK: symbols_total disponibile ({symbols} simboli)")
+                            return True
+                    
+                    logger.warning(f"Tentativo {attempt+1}/{max_attempts} di heartbeat fallito: MT5 non risponde")
+                    
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)  # Attendi prima di riprovare (ridotto da 1.0 a 0.5)
+                except Exception as e:
+                    logger.warning(f"Errore durante il tentativo {attempt+1}/{max_attempts} di heartbeat: {e}")
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)  # Attendi prima di riprovare (ridotto da 1.0 a 0.5)
             
-            # Aggiorna timestamp ultimo heartbeat
-            self.last_heartbeat = datetime.datetime.now()
-            logger.debug(f"Heartbeat OK: {terminal_info.name} (build {terminal_info.build})")
-            return True
+            # Se arriviamo qui, tutti i tentativi sono falliti
+            logger.warning(f"Heartbeat fallito dopo {max_attempts} tentativi: connessione MT5 persa")
+            self.connected = False
+            
+            # Tenta riconnessione immediata
+            logger.info("Tentativo di riconnessione immediata...")
+            
+            # Prima chiudi la connessione esistente
+            try:
+                mt5.shutdown()
+                logger.info("Connessione MT5 chiusa")
+            except Exception as e:
+                logger.warning(f"Errore nella chiusura della connessione MT5: {e}")
+            
+            # Attendi un po' prima di tentare la riconnessione
+            time.sleep(1.0)  # Ridotto da 2.0 a 1.0
+            
+            # Tenta la riconnessione
+            reconnect_result = self._connect_mt5()
+            if reconnect_result:
+                logger.info("Riconnessione immediata riuscita")
+                return True
+            else:
+                logger.warning("Riconnessione immediata fallita")
+                return False
             
         except Exception as e:
             logger.error(f"Errore durante heartbeat: {e}")
