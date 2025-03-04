@@ -146,8 +146,32 @@ class Positions(tb.Frame):
         Args:
             positions: Lista di posizioni
         """
-        self.positions = positions
-        self._update_positions_tree()
+        try:
+            # Verifica che positions sia una lista valida
+            if not isinstance(positions, list):
+                self.logger.warning(f"Formato posizioni non valido: {type(positions)}")
+                return
+            
+            # Filtra posizioni valide
+            valid_positions = []
+            for position in positions:
+                if not isinstance(position, dict):
+                    self.logger.warning(f"Formato posizione non valido: {type(position)}")
+                    continue
+                
+                # Verifica campi obbligatori
+                required_fields = ["ticket", "time", "symbol", "volume", "open_price"]
+                if all(field in position for field in required_fields):
+                    valid_positions.append(position)
+                else:
+                    missing_fields = [field for field in required_fields if field not in position]
+                    self.logger.warning(f"Posizione con campi mancanti: {missing_fields}")
+            
+            self.positions = valid_positions
+            self._update_positions_tree()
+            
+        except Exception as e:
+            self.logger.error(f"Errore nell'aggiornamento delle posizioni: {e}")
     
     def _update_positions_tree(self) -> None:
         """
@@ -159,19 +183,30 @@ class Positions(tb.Frame):
         
         # Aggiungi posizioni
         for position in self.positions:
-            # Converti timestamp in data leggibile
-            time_str = datetime.datetime.fromtimestamp(position["time"]).strftime("%Y-%m-%d %H:%M:%S")
+            # Converti timestamp in data leggibile con gestione errori
+            try:
+                timestamp = position.get("time", 0)
+                time_str = datetime.datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception as e:
+                self.logger.debug(f"Errore nella conversione del timestamp: {e}")
+                time_str = "N/A"
             
-            # Formatta valori
-            ticket = position["ticket"]
-            type_str = position["type"]
-            symbol = position["symbol"]
-            volume = position["volume"]
-            open_price = position["open_price"]
-            current_price = position["current_price"]
-            sl = position["sl"] if position["sl"] > 0 else "-"
-            tp = position["tp"] if position["tp"] > 0 else "-"
-            profit = position["profit"]
+            # Formatta valori con gestione errori migliorata
+            try:
+                ticket = position.get("ticket", 0)
+                type_str = position.get("type", "")
+                symbol = position.get("symbol", "")
+                volume = position.get("volume", 0.0)
+                open_price = position.get("open_price", 0.0)
+                current_price = position.get("current_price", 0.0)
+                sl = position.get("sl", 0.0)
+                sl_str = sl if sl > 0 else "-"
+                tp = position.get("tp", 0.0)
+                tp_str = tp if tp > 0 else "-"
+                profit = position.get("profit", 0.0)
+            except Exception as e:
+                self.logger.error(f"Errore nell'elaborazione della posizione: {e}")
+                continue  # Salta questa posizione e passa alla successiva
             
             # Aggiungi alla tabella
             item_id = self.positions_tree.insert(
@@ -179,7 +214,7 @@ class Positions(tb.Frame):
                 "end",
                 values=(
                     ticket, time_str, type_str, symbol, volume,
-                    open_price, current_price, sl, tp, profit
+                    open_price, current_price, sl_str, tp_str, profit
                 )
             )
             

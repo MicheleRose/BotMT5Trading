@@ -504,6 +504,27 @@ class MT5TradingBotGUI(tb.Window):
                 reconnect_interval = 5.0
                 was_connected = True
                 
+                # Aggiorna dati indice anche se non c'è un segnale
+                try:
+                    # Ottieni informazioni sul simbolo
+                    symbol = self.config_manager.config.get("trading", {}).get("symbol", "EURUSD")
+                    symbol_info = self.mt5_client.get_symbol_info_tick(symbol)
+                    
+                    if symbol_info and "error" not in symbol_info:
+                        # Crea un segnale informativo con i prezzi attuali
+                        info_signal = {
+                            "symbol": symbol,
+                            "bid": symbol_info.get("bid", 0.0),
+                            "ask": symbol_info.get("ask", 0.0),
+                            "time": datetime.datetime.now().strftime("%H:%M:%S")
+                        }
+                        
+                        # Aggiorna UI nel thread principale
+                        if self.bot_active:  # Verifica che il bot sia attivo
+                            self.after(0, lambda s=info_signal: self._update_market_data(s))
+                except Exception as e:
+                    self.logger.error(f"Errore nell'aggiornamento dei dati di mercato: {e}", "TradingBot")
+                
                 # Esegui ciclo del bot
                 if self.trading_bot:
                     signal = self.trading_bot.run_cycle()
@@ -580,6 +601,33 @@ class MT5TradingBotGUI(tb.Window):
         
         except Exception as e:
             self.logger.error(f"Errore nell'aggiornamento dei dati per i grafici: {e}", "GUI")
+    
+    def _update_market_data(self, market_data):
+        """
+        Aggiorna i dati di mercato nella dashboard.
+        
+        Args:
+            market_data: Dati di mercato
+        """
+        try:
+            # Aggiorna ultimo segnale con i prezzi attuali
+            symbol = market_data.get("symbol", "")
+            bid = market_data.get("bid", 0.0)
+            ask = market_data.get("ask", 0.0)
+            time_str = market_data.get("time", "")
+            
+            # Crea stringa informativa
+            info_text = f"{symbol}: Bid={bid:.5f} Ask={ask:.5f} ({time_str})"
+            
+            # Aggiorna ultimo segnale
+            self.dashboard.update_last_signal(info_text)
+            
+            # Aggiorna anche posizioni aperte
+            positions_count = len(self.mt5_client.get_positions())
+            self.dashboard.update_bot_status(self.bot_active, self.config_manager.config, positions_count)
+            
+        except Exception as e:
+            self.logger.error(f"Errore nell'aggiornamento dei dati di mercato: {e}", "GUI")
     
     def _update_chart_data_ui(self, equity_data, balance_data):
         """

@@ -587,12 +587,43 @@ class MT5Client(MT5CommandBase):
                 # Aggiorna posizioni
                 if current_time - last_positions_update >= positions_interval:
                     try:
-                        positions = self.get_positions()
+                        # Ottieni posizioni con gestione errori migliorata
+                        try:
+                            positions = self.get_positions()
+                        except Exception as e:
+                            logger.debug(f"Errore nel recupero delle posizioni: {e}")
+                            positions = []
+                        
+                        # Verifica che positions sia una lista valida
+                        if not isinstance(positions, list):
+                            logger.warning(f"Formato posizioni non valido: {type(positions)}")
+                            positions = []
+                        
+                        # Filtra posizioni valide
+                        valid_positions = []
+                        for position in positions:
+                            if not isinstance(position, dict):
+                                logger.debug(f"Formato posizione non valido: {type(position)}")
+                                continue
+                            
+                            # Verifica campi obbligatori
+                            required_fields = ["ticket", "time", "symbol", "volume", "open_price"]
+                            if all(field in position for field in required_fields):
+                                valid_positions.append(position)
+                            else:
+                                missing_fields = [field for field in required_fields if field not in position]
+                                logger.debug(f"Posizione con campi mancanti: {missing_fields}")
+                        
+                        # Notifica solo se abbiamo un callback e posizioni valide
                         if self.on_positions_update:
-                            self.on_positions_update(positions)
+                            try:
+                                self.on_positions_update(valid_positions)
+                            except Exception as e:
+                                logger.error(f"Errore nella notifica delle posizioni: {e}")
+                        
                         last_positions_update = current_time
                     except Exception as e:
-                        logger.error(f"Errore nell'aggiornamento delle posizioni: {e}")
+                        logger.error(f"Errore generale nell'aggiornamento delle posizioni: {e}")
                         # In caso di errore, verifica subito la connessione
                         self.last_check_time = datetime.datetime.now() - datetime.timedelta(seconds=self.check_interval)
                 
